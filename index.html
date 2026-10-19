@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f2f6fa">
-  <meta name="description" content="A free, browser-based PID controller simulator for quadcopter altitude. Change PID gains, compare traces, and scrub through flight time.">
-  <title>Quadcopter PID Simulator | Engineering 401</title>
+  <meta name="description" content="Interactive PID controller simulator with a simplified second-order quadcopter altitude plant. Adjust PID gains, compare responses, and inspect data points.">
+  <title>Quadcopter PID Simulator - Second-Order Plant | Engineering 401</title>
   <style>
     :root {
       color-scheme: light;
@@ -150,7 +150,7 @@
       <section class="workspace" aria-label="Simulation graphics">
         <div class="panel chart-panel">
           <div class="panel-head">
-            <h2>Quadcopter PID Simulator - Altitude Response</h2>
+            <h2>2nd-Order Quadcopter PID Simulator</h2>
             <div class="chart-head-actions">
               <button id="save-chart" class="save-image-btn" type="button" disabled title="Download a high-resolution PNG of the chart and legend">Save chart as PNG</button>
               <div class="status" id="status" role="status" aria-live="polite">
@@ -212,7 +212,7 @@
         <div class="control-grid">
           <div class="control-field">
             <div class="control-topline"><label class="control-label" for="kp-number">Proportional (Kp)</label><input class="gain-input" type="number" id="kp-number" min="0" max="100" step="any" value="1.0" inputmode="decimal" required aria-label="Proportional (Kp) gain"></div>
-            <input type="range" id="kp" min="0" max="100" step="any" value="1.0" aria-label="Proportional (Kp) slider">
+            <input type="range" id="kp" min="0" max="200" step="any" value="1.0" aria-label="Proportional (Kp) slider">
             <div class="scale-labels"><span>0</span><span>100</span></div>
           </div>
           <div class="control-field">
@@ -250,24 +250,29 @@
         </div>
       </section>
     </main>
-    <footer class="app-footer">Runs entirely in your browser. No Python installation, student accounts, server, or external libraries required. Model and controller equations match the provided Engineering 401 Python simulator.</footer>
+    <footer class="app-footer">Second-order educational plant: G(s) = 1 / (12s² + 18s + 6). PID uses derivative on measured altitude. Runs locally in the browser; no Python installation or external libraries required.</footer>
   </div>
 
   <script>
   (() => {
     "use strict";
 
-    // Original Python model, ported directly to JavaScript:
-    // state = [y, ydot, yddot, integral(error)]
-    // u = Kp * (r - y) + Ki * integral(error) - Kd * ydot
-    // y''' = u/T^3 - 6*y''/T - 11*y'/T^2 - 6*y/T^3, T = 2.
-    // Integrator: fourth-order Runge-Kutta, 0.01-second simulation steps.
+    // SECOND-ORDER PLANT: G(s) = Y(s)/U(s) = 1/(12s^2 + 18s + 6).
+    // Equivalent poles: -0.5 and -1 rad/s; DC gain = 1/6.
+    // Plant equation: 12*y'' + 18*y' + 6*y = u.
+    // Controller (derivative on measurement):
+    //   u = Kp*(r - y) + Ki*integral(r - y) - Kd*y'.
+    // State: [altitude, altitude_rate, integral(error)].
+    // Integrator: fourth-order Runge-Kutta with dt=0.01 s.
     const T0 = -1.0;
     const TF = 30.0;
     const DT = 0.01;
     const TOTAL_STEPS = Math.round((TF - T0) / DT);
     const SETPOINT = 10;
-    const SLOWDOWN = 2;
+    // Coefficients of the second-order plant denominator.
+    const PLANT_A2 = 12;
+    const PLANT_A1 = 18;
+    const PLANT_A0 = 6;
     const TRACE_COLORS = ["#1689bd", "#e07745", "#7e66c1", "#2a9b7b", "#be5288", "#7e9136", "#c69d20", "#3f7692"];
 
     // Fast-forward only when the actual simulated altitude has stayed almost
@@ -298,7 +303,7 @@
 
     let traces = [];
     let activeTrace = null;
-    let currentState = [0, 0, 0, 0];
+    let currentState = [0, 0, 0];
     let currentStep = 0;
     let running = false;
     let activeFinished = false;
@@ -326,14 +331,11 @@
     const currentTime = () => T0 + currentStep * DT;
 
     function derivatives(state, r, kp, ki, kd) {
-      const [y, ydot, yddot, integral] = state;
+      const [y, ydot, integral] = state;
       const e = r - y;
       const u = kp * e + ki * integral - kd * ydot;
-      const ydddot = u / (SLOWDOWN ** 3)
-        - 6 * yddot / SLOWDOWN
-        - 11 * ydot / (SLOWDOWN ** 2)
-        - 6 * y / (SLOWDOWN ** 3);
-      return [ydot, yddot, ydddot, e];
+      const yddot = (u - PLANT_A1 * ydot - PLANT_A0 * y) / PLANT_A2;
+      return [ydot, yddot, e];
     }
 
     function rk4Step(state, r, kp, ki, kd, h) {
@@ -460,7 +462,7 @@
         times: [T0], altitudes: [0], finished: false, fastForwardAt: null,
       };
       traces.push(activeTrace);
-      currentState = [0, 0, 0, 0];
+      currentState = [0, 0, 0];
       currentStep = 0;
       running = true;
       gainsDirty = false;
@@ -509,7 +511,7 @@
       traces = [];
       activeTrace = null;
       runCount = 0;
-      currentState = [0, 0, 0, 0];
+      currentState = [0, 0, 0];
       currentStep = 0;
       activeFinished = false;
       gainsDirty = true;
@@ -843,7 +845,7 @@
       imageContext.fillText("Quadcopter PID Simulator - Altitude Response", margin, 41);
       imageContext.fillStyle = "#65758a";
       imageContext.font = '13px system-ui, -apple-system, "Segoe UI", sans-serif';
-      imageContext.fillText("Closed-loop step response | Third-order plant | Time: -1 to 30 s", margin, 64);
+      imageContext.fillText("Closed-loop step response | Second-order plant: G(s) = 1/(12s^2 + 18s + 6) | Time: -1 to 30 s", margin, 64);
 
       imageContext.save();
       imageContext.translate(margin, headerHeight);
@@ -981,7 +983,7 @@
 
     initialize();
     // Expose numerical code to a test harness only; no server is needed.
-    window.pidSimulatorMath = Object.freeze({ rk4Step, derivatives, DT, T0, TF, SETPOINT });
+    window.pidSimulatorMath = Object.freeze({ rk4Step, derivatives, DT, T0, TF, SETPOINT, PLANT_A2, PLANT_A1, PLANT_A0 });
   })();
   </script>
 </body>
