@@ -76,6 +76,8 @@
     .actions { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
     .select-wrap { display: flex; flex-direction: column; gap: 5px; margin-right: 4px; }
     .select-wrap label { color: var(--sub); font-size: 11px; }
+    .auto-fast-toggle { display: inline-flex; align-items: center; gap: 8px; max-width: 170px; min-height: 43px; font-size: 12px; line-height: 1.25; color: #53677b; cursor: pointer; }
+    .auto-fast-toggle input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; flex: none; cursor: pointer; }
     select { height: 43px; min-width: 102px; padding: 0 9px; background: white; color: var(--ink); border-radius: 9px; border: 1px solid #d5e0e9; }
     button { min-height: 43px; padding: 0 19px; border: 1px solid #d6e1e8; background: white; color: #344b5f; border-radius: 9px; cursor: pointer; font-weight: 680; transition: background .15s ease, transform .1s ease; }
     button:hover:not(:disabled) { background: #edf4f8; }
@@ -207,6 +209,10 @@
                 <option value="1">1x</option><option value="2">2x</option><option value="4" selected>4x</option><option value="8">8x</option><option value="16">16x</option>
               </select>
             </div>
+            <label class="auto-fast-toggle" title="After 2 simulated seconds of almost no altitude change (within 0.05 ft), finish the rest of the trace at 200x speed.">
+              <input type="checkbox" id="auto-fast" checked>
+              Auto fast-forward when steady
+            </label>
             <button id="clear" type="button">Clear all</button>
             <button class="primary" id="start" type="button">Start new trace</button>
           </div>
@@ -233,6 +239,15 @@
     const SLOWDOWN = 2;
     const TRACE_COLORS = ["#1689bd", "#e07745", "#7e66c1", "#2a9b7b", "#be5288", "#7e9136", "#c69d20", "#3f7692"];
 
+    // Fast-forward only when the actual simulated altitude has stayed almost
+    // unchanged for two seconds. A P-only controller need not reach 10 ft to
+    // be settled; it can stabilize with a steady-state error.
+    const SETTLING_WINDOW_STEPS = Math.round(2.0 / DT);
+    const SETTLING_MIN_TIME = 5.0;        // Wait until well after t=0 step.
+    const SETTLING_RANGE_FT = 0.05;       // Max variation during that window.
+    const SETTLING_MAX_SPEED = 0.03;      // Also require small vertical speed.
+    const AUTO_FAST_SPEED = 200;          // Playback speed, not integration dt.
+
     const $ = (id) => document.getElementById(id);
     const canvas = $("response-chart");
     const ctx = canvas.getContext("2d");
@@ -242,6 +257,7 @@
     const startButton = $("start");
     const clearButton = $("clear");
     const saveChartButton = $("save-chart");
+    const autoFastToggle = $("auto-fast");
     const status = $("status");
     const statusText = $("status-text");
     const droneIcon = $("drone-icon");
@@ -259,6 +275,7 @@
     let animationFrame = null;
     let previousFrame = null;
     let accumulatedSimulationTime = 0;
+    let autoFastForwarding = false;
     let scrubbedTime = null;
     let chartWidth = 0;
     let chartHeight = 0;
@@ -343,6 +360,25 @@
       traceCounter.textContent = `${finished} completed trace${finished === 1 ? "" : "s"}`;
     }
 
+    function checkAutoFastForward() {
+      if (!autoFastToggle.checked || autoFastForwarding || currentTime() < SETTLING_MIN_TIME) return;
+      // Checking every 0.1 simulated seconds is ample and avoids needlessly
+      // scanning the trailing altitude window on every RK4 integration step.
+      if (currentStep % 10 !== 0) return;
+      const values = activeTrace.altitudes;
+      const first = values.length - SETTLING_WINDOW_STEPS - 1;
+      if (first < 0) return;
+      let low = Infinity, high = -Infinity;
+      for (let i = first; i < values.length; i++) {
+        low = Math.min(low, values[i]);
+        high = Math.max(high, values[i]);
+      }
+      if (high - low <= SETTLING_RANGE_FT && Math.abs(currentState[1]) <= SETTLING_MAX_SPEED) {
+        autoFastForwarding = true;
+        activeTrace.fastForwardAt = currentTime();
+      }
+    }
+
     function stepOnce() {
       const reference = currentTime() >= 0 ? SETPOINT : 0;
       currentState = rk4Step(currentState, reference, activeTrace.kp, activeTrace.ki, activeTrace.kd, DT);
@@ -355,6 +391,7 @@
       }
       activeTrace.times.push(currentTime());
       activeTrace.altitudes.push(y);
+      checkAutoFastForward();
       if (currentStep >= TOTAL_STEPS) finishTrace(true);
     }
 
@@ -364,13 +401,17 @@
       if (previousFrame === null) previousFrame = timestamp;
       const elapsedSeconds = Math.min((timestamp - previousFrame) / 1000, 0.12);
       previousFrame = timestamp;
-      accumulatedSimulationTime += elapsedSeconds * Number($("speed").value);
+      // Keep every 0.01-second RK4 step; only the display/playback rate changes.
+      const playbackSpeed = autoFastForwarding ? AUTO_FAST_SPEED : Number($("speed").value);
+      accumulatedSimulationTime += elapsedSeconds * playbackSpeed;
       const steps = Math.min(Math.floor(accumulatedSimulationTime / DT), 900);
       accumulatedSimulationTime -= steps * DT;
       for (let i = 0; i < steps && running; i++) stepOnce();
       if (running) {
         displayDrone(currentState[0], currentTime());
-        markStatus("running", `Trace ${activeTrace.id} running - ${fixed(currentTime(), 2)} s`);
+        markStatus("running", autoFastForwarding
+          ? `Trace ${activeTrace.id} steady - fast-forwarding at ${AUTO_FAST_SPEED}x`
+          : `Trace ${activeTrace.id} running - ${fixed(currentTime(), 2)} s`);
       }
       drawChart();
       if (running) animationFrame = requestAnimationFrame(simulationFrame);
@@ -383,7 +424,7 @@
       activeTrace = {
         id: runCount, kp, ki, kd,
         color: TRACE_COLORS[(runCount - 1) % TRACE_COLORS.length],
-        times: [T0], altitudes: [0], finished: false,
+        times: [T0], altitudes: [0], finished: false, fastForwardAt: null,
       };
       traces.push(activeTrace);
       currentState = [0, 0, 0, 0];
@@ -397,6 +438,7 @@
       displayDrone(0, T0);
       previousFrame = null;
       accumulatedSimulationTime = 0;
+      autoFastForwarding = false;
       markStatus("running", `Trace ${runCount} running - -1.00 s`);
       updateButtons();
       refreshLegend();
@@ -416,11 +458,14 @@
         scrubbedTime = TF;
         $("scrub-value").textContent = "30.00 s";
         displayDrone(currentState[0], TF);
-        markStatus("finished", `Trace ${activeTrace.id} finished`);
+        markStatus("finished", activeTrace.fastForwardAt === null
+          ? `Trace ${activeTrace.id} finished`
+          : `Trace ${activeTrace.id} finished (fast-forwarded after ${fixed(activeTrace.fastForwardAt, 1)} s)`);
       } else {
         scrubbedTime = null;
         markStatus("", `Trace ${activeTrace.id} exceeded numeric limits`);
       }
+      autoFastForwarding = false;
       updateButtons();
       refreshLegend();
       drawChart();
@@ -435,6 +480,7 @@
       currentStep = 0;
       activeFinished = false;
       gainsDirty = true;
+      autoFastForwarding = false;
       scrubbedTime = null;
       scrub.value = String(T0);
       $("scrub-value").textContent = "-1.00 s";
@@ -700,6 +746,10 @@
       startButton.addEventListener("click", startTrace);
       clearButton.addEventListener("click", clearAll);
       saveChartButton.addEventListener("click", saveChartAsPNG);
+      autoFastToggle.addEventListener("change", () => {
+        // Students can opt out during a trace to continue at manual playback speed.
+        if (!autoFastToggle.checked) autoFastForwarding = false;
+      });
       gains.forEach((gain, index) => {
         gain.addEventListener("input", () => updateGainFromSlider(index));
         gain.addEventListener("wheel", (event) => {
