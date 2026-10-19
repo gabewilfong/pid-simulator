@@ -27,14 +27,8 @@
     }
     button, select, input { font: inherit; }
     button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid #65a9da; outline-offset: 3px; }
-    .page { width: min(1430px, calc(100% - 40px)); margin: 0 auto; padding: 28px 0 32px; }
-    .masthead { display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-between; align-items: center; margin-bottom: 22px; }
-    .brand { display: flex; align-items: center; gap: 15px; }
-    .brand-icon { display: grid; place-items: center; width: 54px; height: 54px; background: #e2f0fa; border: 1px solid #c8e4f5; border-radius: 15px; flex: none; }
-    h1 { font-size: clamp(22px, 2.45vw, 30px); font-weight: 750; letter-spacing: -.035em; line-height: 1.15; margin: 0 0 5px; }
-    .subtitle, .hint { color: var(--sub); }
-    .subtitle { margin: 0; font-size: 14px; }
-    .model-pill { background: #eaf2f8; border: 1px solid #d4e2ed; padding: 8px 13px; font-size: 12px; color: #41637c; border-radius: 999px; white-space: nowrap; }
+    .page { width: min(1430px, calc(100% - 40px)); margin: 0 auto; padding: 20px 0 32px; }
+    .hint { color: var(--sub); }
     .workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, .83fr); gap: 18px; align-items: stretch; }
     .panel { min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 15px; box-shadow: 0 6px 30px rgba(33, 54, 78, .035); }
     .chart-panel { padding: 20px 22px 14px; display: flex; flex-direction: column; }
@@ -70,6 +64,9 @@
     .control-topline { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; }
     .control-label { font-size: 14px; font-weight: 690; }
     .control-value { min-width: 48px; color: var(--accent-dark); text-align: right; font-variant-numeric: tabular-nums; font-weight: 710; }
+    .gain-input { width: 110px; max-width: 55%; height: 36px; padding: 5px 9px; border: 1px solid #c7d6e3; border-radius: 8px; background: #fff; color: var(--accent-dark); text-align: right; font-weight: 710; font-variant-numeric: tabular-nums; }
+    .gain-input:invalid { border-color: #bd4854; background: #fff5f5; }
+    .gain-input:focus { border-color: var(--accent); }
     input[type=range] { accent-color: var(--accent); display: block; width: 100%; cursor: pointer; height: 22px; margin: 0; }
     input[type=range]:disabled { cursor: not-allowed; opacity: .33; }
     .scale-labels { display: flex; justify-content: space-between; color: #97a5b4; font-size: 11px; margin-top: 2px; font-variant-numeric: tabular-nums; }
@@ -98,8 +95,6 @@
     }
     @media (max-width: 720px) {
       .page { width: min(100% - 24px, 650px); padding: 16px 0 22px; }
-      .brand-icon { width: 45px; height: 45px; }
-      .model-pill { display: none; }
       .chart-panel, .drone-panel, .controls { padding: 15px; }
       .chart-stage { height: 320px; }
       .control-grid { grid-template-columns: 1fr; gap: 17px; }
@@ -118,24 +113,6 @@
 </head>
 <body>
   <div class="page">
-    <header class="masthead">
-      <div class="brand">
-        <div class="brand-icon" aria-hidden="true">
-          <svg width="35" height="35" viewBox="0 0 64 64" fill="none">
-            <path d="M10 22h44M15 21v-9m34 9v-9M8 11h14m20 0h14" stroke="#3d759a" stroke-width="4" stroke-linecap="round"/>
-            <rect x="16" y="23" width="32" height="13" rx="6" fill="#497a96"/>
-            <circle cx="32" cy="23" r="5" fill="#2d5065"/>
-            <path d="M32 35v7" stroke="#577588" stroke-width="3"/>
-            <path d="M24 43h16l-5 8h-6z" fill="#b93335"/>
-          </svg>
-        </div>
-        <div>
-          <h1>Quadcopter PID Simulator</h1>
-          <p class="subtitle">Engineering 401 &middot; Interactive closed-loop altitude control</p>
-        </div>
-      </div>
-      <div class="model-pill">10 ft setpoint &nbsp;&middot;&nbsp; RK4 simulation &nbsp;&middot;&nbsp; Third-order plant</div>
-    </header>
 
     <main>
       <section class="workspace" aria-label="Simulation graphics">
@@ -197,22 +174,22 @@
       <section class="panel controls" aria-label="PID controller controls">
         <div class="controls-title">
           <h2>Controller gains</h2>
-          <span class="hint">Move any gain to enable another trace. Hover over sliders and use the mouse wheel for fine adjustments.</span>
+          <span class="hint">Type a gain value or move its slider. Scroll over sliders to adjust by 0.1.</span>
         </div>
         <div class="control-grid">
           <div class="control-field">
-            <div class="control-topline"><label class="control-label" for="kp">Proportional (Kp)</label><output class="control-value" for="kp" id="kp-value">1.0</output></div>
-            <input type="range" id="kp" min="0" max="100" step="0.1" value="1.0">
+            <div class="control-topline"><label class="control-label" for="kp-number">Proportional (Kp)</label><input class="gain-input" type="number" id="kp-number" min="0" max="100" step="any" value="1.0" inputmode="decimal" required aria-label="Proportional (Kp) gain"></div>
+            <input type="range" id="kp" min="0" max="100" step="any" value="1.0" aria-label="Proportional (Kp) slider">
             <div class="scale-labels"><span>0</span><span>100</span></div>
           </div>
           <div class="control-field">
-            <div class="control-topline"><label class="control-label" for="ki">Integral (Ki)</label><output class="control-value" for="ki" id="ki-value">0.0</output></div>
-            <input type="range" id="ki" min="0" max="50" step="0.1" value="0">
+            <div class="control-topline"><label class="control-label" for="ki-number">Integral (Ki)</label><input class="gain-input" type="number" id="ki-number" min="0" max="50" step="any" value="0" inputmode="decimal" required aria-label="Integral (Ki) gain"></div>
+            <input type="range" id="ki" min="0" max="50" step="any" value="0" aria-label="Integral (Ki) slider">
             <div class="scale-labels"><span>0</span><span>50</span></div>
           </div>
           <div class="control-field">
-            <div class="control-topline"><label class="control-label" for="kd">Derivative (Kd)</label><output class="control-value" for="kd" id="kd-value">0.0</output></div>
-            <input type="range" id="kd" min="0" max="50" step="0.1" value="0">
+            <div class="control-topline"><label class="control-label" for="kd-number">Derivative (Kd)</label><input class="gain-input" type="number" id="kd-number" min="0" max="50" step="any" value="0" inputmode="decimal" required aria-label="Derivative (Kd) gain"></div>
+            <input type="range" id="kd" min="0" max="50" step="any" value="0" aria-label="Derivative (Kd) slider">
             <div class="scale-labels"><span>0</span><span>50</span></div>
           </div>
         </div>
@@ -260,7 +237,7 @@
     const canvas = $("response-chart");
     const ctx = canvas.getContext("2d");
     const gains = [$("kp"), $("ki"), $("kd")];
-    const gainValues = [$("kp-value"), $("ki-value"), $("kd-value")];
+    const gainInputs = [$("kp-number"), $("ki-number"), $("kd-number")];
     const scrub = $("scrub");
     const startButton = $("start");
     const clearButton = $("clear");
@@ -288,6 +265,14 @@
 
     const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
     const fixed = (v, digits) => Number(v).toFixed(digits);
+    // Keep typed fractional gains (e.g. 0.025) instead of forcing one decimal.
+    const formatGain = (value) => String(Number(Number(value).toPrecision(12)));
+    const validGainInput = (index) => {
+      const input = gainInputs[index];
+      if (input.value.trim() === "" || input.validity.badInput) return false;
+      const value = Number(input.value);
+      return Number.isFinite(value) && value >= Number(gains[index].min) && value <= Number(gains[index].max);
+    };
     const currentTime = () => T0 + currentStep * DT;
 
     function derivatives(state, r, kp, ki, kd) {
@@ -326,7 +311,7 @@
     }
 
     function updateButtons() {
-      startButton.disabled = running || !gainsDirty;
+      startButton.disabled = running || !gainsDirty || gainInputs.some((_, i) => !validGainInput(i));
       clearButton.disabled = running;
       saveChartButton.disabled = traces.length === 0;
       scrub.disabled = running || !activeFinished;
@@ -460,9 +445,37 @@
       drawChart();
     }
 
-    function updateGain(index) {
-      gainValues[index].textContent = fixed(gains[index].value, 1);
+    function updateGainFromSlider(index) {
+      // When dragging, use the same 0.1 increments as the desktop simulator.
+      // Typed values can still use finer precision.
+      const rounded = Math.round(Number(gains[index].value) * 10) / 10;
+      gains[index].value = String(rounded);
+      gainInputs[index].value = formatGain(rounded);
       gainsDirty = true;
+      updateButtons();
+    }
+
+    function updateGainFromInput(index) {
+      // Do not overwrite the field as the user types: "", "0.", etc.
+      // While an entry is incomplete or out of bounds, Start is disabled.
+      if (validGainInput(index)) {
+        gains[index].value = gainInputs[index].value;
+        gainsDirty = true;
+      }
+      updateButtons();
+    }
+
+    function commitGainInput(index) {
+      const input = gainInputs[index];
+      // Restore the last valid slider value if the field is empty or malformed.
+      if (input.value.trim() === "" || input.validity.badInput) {
+        input.value = formatGain(gains[index].value);
+      } else {
+        const value = clamp(Number(input.value), Number(gains[index].min), Number(gains[index].max));
+        gains[index].value = String(value);
+        input.value = formatGain(value);
+        gainsDirty = true;
+      }
       updateButtons();
     }
 
@@ -598,7 +611,7 @@
       const legendEntries = [
         { label: "Reference step: 10 ft", color: "#748599", dashed: true },
         ...traces.map((trace) => ({
-          label: `Trace ${trace.id}: Kp ${fixed(trace.kp, 1)}, Ki ${fixed(trace.ki, 1)}, Kd ${fixed(trace.kd, 1)}${trace === activeTrace && running ? " (running)" : ""}`,
+          label: `Trace ${trace.id}: Kp ${formatGain(trace.kp)}, Ki ${formatGain(trace.ki)}, Kd ${formatGain(trace.kd)}${trace === activeTrace && running ? " (running)" : ""}`,
           color: trace.color,
           dashed: false,
         })),
@@ -688,16 +701,29 @@
       clearButton.addEventListener("click", clearAll);
       saveChartButton.addEventListener("click", saveChartAsPNG);
       gains.forEach((gain, index) => {
-        gain.addEventListener("input", () => updateGain(index));
+        gain.addEventListener("input", () => updateGainFromSlider(index));
         gain.addEventListener("wheel", (event) => {
           event.preventDefault();
           const delta = Math.sign(-event.deltaY);
           const value = clamp(Math.round((Number(gain.value) + delta * .1) * 10) / 10, Number(gain.min), Number(gain.max));
           if (value !== Number(gain.value)) {
             gain.value = String(value);
-            updateGain(index);
+            updateGainFromSlider(index);
           }
         }, { passive: false });
+        // Use 0.1 increments for arrow keys, too, even though the range slider
+        // uses step="any" so it can represent exact typed fractional values.
+        gain.addEventListener("keydown", (event) => {
+          if (!['ArrowLeft', 'ArrowDown', 'ArrowRight', 'ArrowUp'].includes(event.key)) return;
+          event.preventDefault();
+          const direction = ['ArrowRight', 'ArrowUp'].includes(event.key) ? 1 : -1;
+          const value = clamp(Math.round((Number(gain.value) + direction * .1) * 10) / 10, Number(gain.min), Number(gain.max));
+          gain.value = String(value);
+          updateGainFromSlider(index);
+        });
+        gainInputs[index].addEventListener("input", () => updateGainFromInput(index));
+        gainInputs[index].addEventListener("change", () => commitGainInput(index));
+        gainInputs[index].addEventListener("blur", () => commitGainInput(index));
       });
       scrub.addEventListener("input", updateScrub);
       scrub.addEventListener("wheel", (event) => {
